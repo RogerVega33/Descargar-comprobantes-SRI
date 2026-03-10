@@ -4,8 +4,6 @@ import glob
 import signal
 import logging
 import threading
-import xml.etree.ElementTree as ET
-from datetime import datetime
 from pathlib import Path
 
 from selenium import webdriver
@@ -14,8 +12,8 @@ from selenium.webdriver.chrome.service import Service as BrowserService
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CONFIG — ajusta estos valores antes de ejecutar
@@ -291,31 +289,49 @@ def consultar_periodo(driver, año, mes):
     Select(esperar(driver, By.ID, "frmPrincipal:dia")).select_by_value("0")
     Select(esperar(driver, By.ID, "frmPrincipal:cmbTipoComprobante")).select_by_value("1")
 
-    # Esperar que la tabla anterior desaparezca antes de consultar
-    try:
-        WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"))
-        )
-        # Si había tabla, esperar que se vuelva stale tras el clic
-        btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
-        driver.execute_script("arguments[0].click();", btn)
-        WebDriverWait(driver, TIMEOUT).until(
-            EC.staleness_of(driver.find_element(By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"))
-        )
-    except TimeoutException:
-        # No había tabla previa, simplemente consultar
-        btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
-        driver.execute_script("arguments[0].click();", btn)
+    def lanzar_consulta():
+        try:
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"))
+            )
+            btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
+            driver.execute_script("arguments[0].click();", btn)
+            try:
+                elemento_tabla = driver.find_element(By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}")
+                WebDriverWait(driver, TIMEOUT).until(EC.staleness_of(elemento_tabla))
+            except (NoSuchElementException, StaleElementReferenceException):
+                pass  # la tabla ya cambió de estado, podemos continuar
+        except TimeoutException:
+            btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
+            driver.execute_script("arguments[0].click();", btn)
 
-    # Ahora esperar que la nueva tabla cargue
-    try:
-        WebDriverWait(driver, TIMEOUT).until(
-            EC.presence_of_element_located((By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"))
-        )
+    for intento in range(3):
+        lanzar_consulta()
+
+        # Esperar lo que llegue primero: la tabla o el mensaje de captcha
+        try:
+            WebDriverWait(driver, TIMEOUT).until(EC.any_of(
+                EC.presence_of_element_located((By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}")),
+                EC.presence_of_element_located((By.CSS_SELECTOR, "#formMessages\\:messages .ui-messages-warn-summary")),
+            ))
+        except TimeoutException:
+            log.warning("No hay comprobantes para este período o la tabla tardó demasiado.")
+            return
+
+        # Verificar cuál de los dos apareció
+        try:
+            msg = driver.find_element(By.CSS_SELECTOR, "#formMessages\\:messages .ui-messages-warn-summary")
+            if "aptcha" in msg.text:
+                log.warning(f"  Captcha fallida, reintentando ({intento + 1}/3)...")
+                if intento == 2:
+                    raise SystemExit("Captcha fallida 3 veces consecutivas. Ejecución terminada.")
+                time.sleep(2)
+                continue  # reintentar
+        except NoSuchElementException:
+            pass  # no hay captcha, la tabla cargó correctamente
+
         log.info("Tabla de resultados cargada.")
-    except TimeoutException:
-        log.warning("No hay comprobantes para este período o la tabla tardó demasiado.")
-
+        return
 
 # ══════════════════════════════════════════════════════════════════════════════
 # DESCARGA DE COMPROBANTES EN UNA PÁGINA
@@ -583,6 +599,14 @@ def generar_periodos(mes_ini, año_ini, mes_fin, año_fin):
             año += 1
     return periodos
 
+def cerrar_sesion(driver):
+    try:
+        log.info("Cerrando sesión...")
+        driver.get("https://srienlinea.sri.gob.ec/tuportal-internet/salir.jspa")
+        time.sleep(2)
+        log.info("Sesión cerrada.")
+    except Exception as e:
+        log.warning(f"No se pudo cerrar sesión: {e}")
 
 def main():
     registrar_señales()
@@ -608,18 +632,29 @@ def main():
                 resumen[f"{año}-{mes:02d}"] = n
             except Exception as e:
                 log.error(f"Error en período {año}-{mes:02d}: {e}")
-                resumen[f"{año}-{mes:02d}"] = "ERROR"
+                log.info(f"Reintentando período {año}-{mes:02d}...")
+                try:
+                    n = descargar_periodo(driver, año, mes, primer_periodo=False)
+                    resumen[f"{año}-{mes:02d}"] = n
+                    log.info(f"Reintento exitoso para {año}-{mes:02d}.")
+                except Exception as e2:
+                    log.error(f"Reintento fallido para {año}-{mes:02d}: {e2}")
+                    resumen[f"{año}-{mes:02d}"] = "ERROR"
 
         # Resumen final
         log.info("═" * 60)
         log.info("RESUMEN DE DESCARGA")
         for periodo, n in resumen.items():
-            log.info(f"  {periodo}: {n} comprobantes descargados")
+            if n == "ERROR":
+                log.info(f"  {periodo}: ❌ ERROR — revisar log para más detalles")
+            else:
+                log.info(f"  {periodo}: {n} comprobantes descargados")
         log.info("═" * 60)
 
     except SystemExit as e:
         log.info(str(e))
     finally:
+        cerrar_sesion(driver)
         driver.quit()
         log.info("Navegador cerrado. Proceso finalizado.")
 
