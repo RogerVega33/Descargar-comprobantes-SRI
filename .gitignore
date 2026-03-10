@@ -1,0 +1,36 @@
+# Entorno virtual
+venv/
+.env/
+.venv/
+
+# Credenciales — NUNCA subir al repositorio
+.env
+secrets.py
+
+# Descargas y comprobantes
+sri_comprobantes/
+*.xml
+*.pdf
+
+# Logs
+*.log
+
+# ChromeDriver y caché de webdriver-manager
+.wdm/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Sistema
+.DS_Store
+Thumbs.db
