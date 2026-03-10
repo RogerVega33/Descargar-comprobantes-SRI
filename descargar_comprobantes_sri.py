@@ -25,10 +25,10 @@ RUC   = os.environ.get("SRI_RUC", "") # Tu RUC o cédula
 CLAVE = os.environ.get("SRI_CLAVE", "") # Tu clave del portal SRI en línea
 
 # Rango de meses a descargar
-MES_INICIO  = 12
-AÑO_INICIO  = 2025
+MES_INICIO  = 11
+AÑO_INICIO  = 2024
 MES_FIN     = 12
-AÑO_FIN     = 2025
+AÑO_FIN     = 2024
 
 # Directorio base donde se guardarán los archivos
 # Se crea la estructura: DIRECTORIO_DESCARGA/YYYY-MM/
@@ -286,23 +286,28 @@ def consultar_periodo(driver, año, mes):
     """
     log.info(f"Consultando período: {año}-{mes:02d} | Tipo: Factura | Día: Todos")
 
-    # ── Año ───────────────────────────────────────────────────────────────────
     Select(esperar(driver, By.ID, "frmPrincipal:ano")).select_by_value(str(año))
-
-    # ── Mes ───────────────────────────────────────────────────────────────────
     Select(esperar(driver, By.ID, "frmPrincipal:mes")).select_by_value(str(mes))
-
-    # ── Día → Todos (value="0") ───────────────────────────────────────────────
     Select(esperar(driver, By.ID, "frmPrincipal:dia")).select_by_value("0")
-
-    # ── Tipo de comprobante → Factura (value="1") ─────────────────────────────
     Select(esperar(driver, By.ID, "frmPrincipal:cmbTipoComprobante")).select_by_value("1")
 
-    # ── Botón Consultar ───────────────────────────────────────────────────────
-    btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
-    driver.execute_script("arguments[0].click();", btn)  # JS click evita intercepts de PrimeFaces
+    # Esperar que la tabla anterior desaparezca antes de consultar
+    try:
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"))
+        )
+        # Si había tabla, esperar que se vuelva stale tras el clic
+        btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
+        driver.execute_script("arguments[0].click();", btn)
+        WebDriverWait(driver, TIMEOUT).until(
+            EC.staleness_of(driver.find_element(By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"))
+        )
+    except TimeoutException:
+        # No había tabla previa, simplemente consultar
+        btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
+        driver.execute_script("arguments[0].click();", btn)
 
-    # ── Esperar que la tabla cargue (primer XML de fila 0 como señal) ─────────
+    # Ahora esperar que la nueva tabla cargue
     try:
         WebDriverWait(driver, TIMEOUT).until(
             EC.presence_of_element_located((By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"))
@@ -362,20 +367,18 @@ def esperar_archivo_nuevo(directorio, extension, archivos_antes, timeout=30):
 
 def leer_nombre_comprobante(driver, idx):
     """
-    Lee el nombre del comprobante directamente de la tercera columna de la tabla.
-    Ejemplo de texto: "Factura  033-110-000290674"
-    Devuelve un nombre de archivo seguro, ej: "Factura_033-110-000290674"
+    Lee el nombre del comprobante desde la misma fila que contiene los botones,
+    verificando que el botón XML de esa fila siga siendo el correcto.
     """
     try:
-        # La tercera celda (índice 2) de la fila idx contiene tipo + número
+        # Buscar la celda de nombre dentro de la misma fila que tiene el botón lnkXml
         celda = driver.find_element(
             By.XPATH,
-            f"//tr[@data-ri='{idx}']/td[3]/div"
+            f"//a[@id='{ID_PREFIX}:{idx}:{ID_SUFIJO_XML}']/ancestor::tr/td[3]/div"
         )
         texto = celda.text.strip()
-        # Reemplazar espacios múltiples y caracteres no válidos en nombre de archivo
-        nombre = " ".join(texto.split())          # colapsar espacios múltiples
-        nombre = nombre.replace(" ", "_")          # espacios → guión bajo
+        nombre = " ".join(texto.split())
+        nombre = nombre.replace(" ", "_")
         nombre = "".join(c for c in nombre if c.isalnum() or c in "-_.")
         return nombre if nombre else None
     except NoSuchElementException:
@@ -415,13 +418,24 @@ def descargar_pagina_actual(driver, dir_descarga):
         # ── XML ──────────────────────────────────────────────────────────────
         id_xml = f"{ID_PREFIX}:{idx}:{ID_SUFIJO_XML}"
         ruta_xml = None
+        nombre = None
         try:
-            btn_xml = WebDriverWait(driver, TIMEOUT).until(
-                EC.element_to_be_clickable((By.ID, id_xml))
-            )
-            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn_xml)
+            WebDriverWait(driver, TIMEOUT).until(EC.element_to_be_clickable((By.ID, id_xml)))
+            nombre = leer_nombre_comprobante(driver, idx)  # leer nombre anclado al botón
+            if nombre:
+                log.debug(f"    {etiqueta} Nombre leído de tabla: {nombre}")
+            else:
+                log.warning(f"    {etiqueta} No se pudo leer nombre, se usará nombre genérico")
             snap_xml = snapshot_archivos(dir_descarga, "xml")
-            btn_xml.click()
+            for intento in range(3):
+                try:
+                    btn_xml = driver.find_element(By.ID, id_xml)
+                    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn_xml)
+                    btn_xml = driver.find_element(By.ID, id_xml)  # buscar de nuevo tras el scroll
+                    driver.execute_script("arguments[0].click();", btn_xml)
+                    break
+                except Exception:
+                    time.sleep(1)
             ruta_xml = esperar_archivo_nuevo(dir_descarga, "xml", snap_xml)
             if ruta_xml:
                 destino_xml = Path(dir_descarga) / f"{nombre}.xml" if nombre else Path(ruta_xml)
@@ -554,7 +568,7 @@ def descargar_periodo(driver, año, mes, primer_periodo=False):
             break
         pagina += 1
 
-    log.info(f"Período {año}-{mes:02d}: {total_descargados} comprobantes en {pagina} página(s).")
+    log.info(f"✔ Período {año}-{mes:02d}: descarga finalizada — {total_descargados} comprobantes descargados en {pagina} página(s).")
     return total_descargados
 
 def generar_periodos(mes_ini, año_ini, mes_fin, año_fin):
@@ -600,7 +614,7 @@ def main():
         log.info("═" * 60)
         log.info("RESUMEN DE DESCARGA")
         for periodo, n in resumen.items():
-            log.info(f"  {periodo}: {n} comprobante(s)")
+            log.info(f"  {periodo}: {n} comprobantes descargados")
         log.info("═" * 60)
 
     except SystemExit as e:
