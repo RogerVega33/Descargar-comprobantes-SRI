@@ -13,7 +13,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException, WebDriverException
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CONFIG — ajusta estos valores antes de ejecutar
@@ -23,10 +23,10 @@ RUC   = os.environ.get("SRI_RUC", "") # Tu RUC o cédula
 CLAVE = os.environ.get("SRI_CLAVE", "") # Tu clave del portal SRI en línea
 
 # Rango de meses a descargar
-MES_INICIO  = 11
-AÑO_INICIO  = 2024
-MES_FIN     = 12
-AÑO_FIN     = 2024
+MES_INICIO  = 3
+AÑO_INICIO  = 2026
+MES_FIN     = 3
+AÑO_FIN     = 2026
 
 # Directorio base donde se guardarán los archivos
 # Se crea la estructura: DIRECTORIO_DESCARGA/YYYY-MM/
@@ -187,7 +187,13 @@ def hacer_login(driver):
       Botón        : id="kc-login"
     """
     log.info("Navegando a la página de inicio SRI...")
-    driver.get("https://srienlinea.sri.gob.ec/sri-en-linea/inicio/NAT")
+    try:
+        driver.get("https://srienlinea.sri.gob.ec/sri-en-linea/inicio/NAT")
+    except WebDriverException as e:
+        if "ERR_CONNECTION_RESET" in str(e) or "ERR_NAME_NOT_RESOLVED" in str(e):
+            log.error("El portal del SRI no está disponible. Intenta más tarde.")
+            raise SystemExit(1)
+        raise
 
     # Clic en el enlace "Iniciar sesión" del topbar (Angular, puede tardar en renderizar)
     btn_iniciar = esperar_clickable(driver, By.CSS_SELECTOR,
@@ -619,9 +625,11 @@ def main():
     # Inicializar con directorio base (se actualiza por período)
     Path(DIRECTORIO_DESCARGA).mkdir(parents=True, exist_ok=True)
     driver = configurar_driver(DIRECTORIO_DESCARGA)
+    login_exitoso = False
 
     try:
         hacer_login(driver)
+        login_exitoso = True
         periodos = generar_periodos(MES_INICIO, AÑO_INICIO, MES_FIN, AÑO_FIN)
 
         resumen = {}
@@ -651,11 +659,16 @@ def main():
                 log.info(f"  {periodo}: {n} comprobantes descargados")
         log.info("═" * 60)
 
-    except SystemExit as e:
-        log.info(str(e))
     finally:
-        cerrar_sesion(driver)
-        driver.quit()
+        if login_exitoso:
+            try:
+                cerrar_sesion(driver)
+            except Exception:
+                pass
+        try:
+            driver.quit()
+        except Exception:
+            pass
         log.info("Navegador cerrado. Proceso finalizado.")
 
 
