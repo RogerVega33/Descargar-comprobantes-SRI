@@ -300,8 +300,8 @@ def consultar_periodo(driver, año, mes):
             WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"))
             )
-            # btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
-            btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnConsultarSinRe")
+            btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
+            # btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnConsultarSinRe")
             driver.execute_script("arguments[0].click();", btn)
             try:
                 elemento_tabla = driver.find_element(By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}")
@@ -309,8 +309,8 @@ def consultar_periodo(driver, año, mes):
             except (NoSuchElementException, StaleElementReferenceException):
                 pass  # la tabla ya cambió de estado, podemos continuar
         except TimeoutException:
-            # btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
-            btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnConsultarSinRe")
+            btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
+            # btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnConsultarSinRe")
             driver.execute_script("arguments[0].click();", btn)
 
     for intento in range(3):
