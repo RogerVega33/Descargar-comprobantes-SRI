@@ -46,7 +46,11 @@ PAUSA_ENTRE_DESCARGAS = 1.5
 ID_PREFIX   = "frmPrincipal:tablaCompRecibidos"
 ID_SUFIJO_XML = "lnkXml"
 ID_SUFIJO_PDF = "lnkPdf"
-
+# Este ID cambia seguido, por eso se lo define en un array para buscar la coincidencia
+IDS_BOTON_BUSCAR = [
+    "frmPrincipal:btnConsultarSinRe",
+    "frmPrincipal:btnBuscar",
+]
 # ══════════════════════════════════════════════════════════════════════════════
 # URLS DEL PORTAL SRI
 # ══════════════════════════════════════════════════════════════════════════════
@@ -127,6 +131,24 @@ def esperar_clickable(driver, by, selector, timeout=TIMEOUT):
         EC.element_to_be_clickable((by, selector))
     )
 
+def esperar_clickable_cualquiera(driver, by, selectores, timeout=TIMEOUT):
+    """
+    Espera hasta que CUALQUIERA de los selectores dados sea clickeable
+    y devuelve el WebElement correspondiente al primero que aparezca.
+    Útil cuando el portal cambia el id de un botón entre versiones/despliegues.
+    """
+    def _condicion(driver):
+        for selector in selectores:
+            try:
+                el = driver.find_element(by, selector)
+                if el.is_displayed() and el.is_enabled():
+                    return el
+            except (NoSuchElementException, StaleElementReferenceException):
+                continue
+        return False
+
+    elemento = WebDriverWait(driver, timeout).until(_condicion)
+    return elemento
 
 def directorio_mes(año, mes):
     """Devuelve (y crea si no existe) el directorio para el mes/año dado."""
@@ -300,8 +322,7 @@ def consultar_periodo(driver, año, mes):
             WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"))
             )
-            btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
-            # btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnConsultarSinRe")
+            btn = esperar_clickable_cualquiera(driver, By.ID, IDS_BOTON_BUSCAR)
             driver.execute_script("arguments[0].click();", btn)
             try:
                 elemento_tabla = driver.find_element(By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}")
@@ -309,8 +330,7 @@ def consultar_periodo(driver, año, mes):
             except (NoSuchElementException, StaleElementReferenceException):
                 pass  # la tabla ya cambió de estado, podemos continuar
         except TimeoutException:
-            btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnBuscar")
-            # btn = esperar_clickable(driver, By.ID, "frmPrincipal:btnConsultarSinRe")
+            btn = esperar_clickable_cualquiera(driver, By.ID, IDS_BOTON_BUSCAR)
             driver.execute_script("arguments[0].click();", btn)
 
     for intento in range(3):
