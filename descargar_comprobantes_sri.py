@@ -1,3 +1,4 @@
+import argparse
 import os
 import time
 import glob
@@ -21,12 +22,6 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 
 RUC   = os.environ.get("SRI_RUC", "") # Tu RUC o cédula
 CLAVE = os.environ.get("SRI_CLAVE", "") # Tu clave del portal SRI en línea
-
-# Rango de meses a descargar
-MES_INICIO  = 3
-AÑO_INICIO  = 2026
-MES_FIN     = 3
-AÑO_FIN     = 2026
 
 # Directorio base donde se guardarán los archivos
 # Se crea la estructura: DIRECTORIO_DESCARGA/YYYY-MM/
@@ -624,6 +619,55 @@ def generar_periodos(mes_ini, año_ini, mes_fin, año_fin):
             año += 1
     return periodos
 
+
+def validar_periodo(valor):
+    """Valida un período en formato AAAA-MM y devuelve (año, mes)."""
+    partes = valor.split("-")
+    if (
+        len(partes) != 2
+        or len(partes[0]) != 4
+        or len(partes[1]) != 2
+        or not all(parte.isascii() and parte.isdigit() for parte in partes)
+    ):
+        raise argparse.ArgumentTypeError(
+            f"período inválido: {valor!r}; usa el formato AAAA-MM"
+        )
+
+    año, mes = map(int, partes)
+
+    if año < 1:
+        raise argparse.ArgumentTypeError("el año debe ser mayor que cero")
+    if not 1 <= mes <= 12:
+        raise argparse.ArgumentTypeError("el mes debe estar entre 01 y 12")
+
+    return año, mes
+
+
+def parsear_argumentos():
+    parser = argparse.ArgumentParser(
+        description="Descarga comprobantes electrónicos recibidos desde el portal del SRI."
+    )
+    parser.add_argument(
+        "--desde",
+        required=True,
+        type=validar_periodo,
+        metavar="AAAA-MM",
+        help="primer mes del rango de descarga",
+    )
+    parser.add_argument(
+        "--hasta",
+        required=True,
+        type=validar_periodo,
+        metavar="AAAA-MM",
+        help="último mes del rango de descarga",
+    )
+
+    args = parser.parse_args()
+    if args.desde > args.hasta:
+        parser.error("--desde no puede ser posterior a --hasta")
+
+    return args
+
 def cerrar_sesion(driver):
     try:
         log.info("Cerrando sesión...")
@@ -634,10 +678,14 @@ def cerrar_sesion(driver):
         log.warning(f"No se pudo cerrar sesión: {e}")
 
 def main():
+    args = parsear_argumentos()
+    año_inicio, mes_inicio = args.desde
+    año_fin, mes_fin = args.hasta
+
     registrar_señales()
     log.info("═" * 60)
     log.info("SRI — Descarga automática de comprobantes electrónicos")
-    log.info(f"Períodos: {AÑO_INICIO}-{MES_INICIO:02d} → {AÑO_FIN}-{MES_FIN:02d}")
+    log.info(f"Períodos: {año_inicio}-{mes_inicio:02d} → {año_fin}-{mes_fin:02d}")
     log.info(f"Directorio de salida: {DIRECTORIO_DESCARGA}")
     log.info("═" * 60)
 
@@ -649,7 +697,7 @@ def main():
     try:
         hacer_login(driver)
         login_exitoso = True
-        periodos = generar_periodos(MES_INICIO, AÑO_INICIO, MES_FIN, AÑO_FIN)
+        periodos = generar_periodos(mes_inicio, año_inicio, mes_fin, año_fin)
 
         resumen = {}
         for i, (año, mes) in enumerate(periodos):

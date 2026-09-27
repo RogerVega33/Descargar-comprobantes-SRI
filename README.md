@@ -52,14 +52,14 @@ python3 -m pip install -r requirements.txt
 
 ## Configuración
 
-El RUC y la clave se proporcionan mediante variables de entorno. Los demás valores se configuran actualmente en la sección `CONFIG` al inicio de `descargar_comprobantes_sri.py`.
+El RUC y la clave se proporcionan mediante variables de entorno. El rango de descarga se indica al ejecutar el script y los demás valores se configuran en la sección `CONFIG` al inicio de `descargar_comprobantes_sri.py`.
 
-| Variable | Valor o ejemplo | Cómo se configura | Descripción |
+| Variable u opción | Valor o ejemplo | Cómo se configura | Descripción |
 |---|---|---|---|
 | `RUC` | `"0999999999001"` | Variable de entorno `SRI_RUC` | RUC o cédula para iniciar sesión |
 | `CLAVE` | `"tu_clave"` | Variable de entorno `SRI_CLAVE` | Contraseña del portal SRI |
-| `MES_INICIO` / `AÑO_INICIO` | `1` / `2025` | Código, sección `CONFIG` | Primer mes del rango |
-| `MES_FIN` / `AÑO_FIN` | `12` / `2025` | Código, sección `CONFIG` | Último mes del rango |
+| `--desde` | `2025-01` | Argumento obligatorio | Primer mes del rango, en formato `AAAA-MM` |
+| `--hasta` | `2025-12` | Argumento obligatorio | Último mes del rango, en formato `AAAA-MM` |
 | `DIRECTORIO_DESCARGA` | `<proyecto>/sri_comprobantes` | Código, sección `CONFIG` | Carpeta raíz de descargas; por defecto se crea junto al script |
 | `BROWSER_PATH` | `"/usr/bin/google-chrome"` | Código, sección `CONFIG` | Ruta al ejecutable de Google Chrome |
 | `TIMEOUT` | `20` | Código, sección `CONFIG` | Segundos máximos de espera por elemento |
@@ -70,18 +70,16 @@ El RUC y la clave se proporcionan mediante variables de entorno. Los demás valo
 source venv/bin/activate
 export SRI_RUC="0999999999001"
 export SRI_CLAVE="contraseña_SRI"
-python3 descargar_comprobantes_sri.py
+python3 descargar_comprobantes_sri.py --desde 2026-01 --hasta 2026-03
 ```
 
 **Probar con un solo mes antes de lanzar un rango largo:**
 
-```python
-# En la sección CONFIG:
-MES_INICIO = 3
-AÑO_INICIO = 2026
-MES_FIN    = 3
-AÑO_FIN    = 2026
+```bash
+python3 descargar_comprobantes_sri.py --desde 2026-03 --hasta 2026-03
 ```
+
+El mes debe estar entre `01` y `12`, y `--desde` no puede ser posterior a `--hasta`.
 
 **Modo headless** (sin ventana de Chrome): descomenta esta línea en `configurar_driver()`:
 
