@@ -38,9 +38,6 @@ BROWSER_PATH = "/usr/bin/google-chrome"
 # Espera máxima en segundos para que aparezcan los elementos
 TIMEOUT = 20
 
-# Pausa entre descargas (segundos) — evita sobrecargar el servidor
-PAUSA_ENTRE_DESCARGAS = 1.5
-
 # IDs de los botones de descarga en la tabla (patrón: prefijo + índice_fila + sufijo)
 # El portal usa JSF con índice 0-based por fila
 ID_PREFIX   = "frmPrincipal:tablaCompRecibidos"

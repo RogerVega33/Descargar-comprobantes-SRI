@@ -45,25 +45,24 @@ python3 -m venv venv
 source venv/bin/activate
 
 # 2. Instalar dependencias
-pip install selenium webdriver-manager
+python3 -m pip install -r requirements.txt
 ```
 
-`webdriver-manager` descarga automáticamente el ChromeDriver compatible con tu versión de Chrome. No necesitas instalarlo manualmente.
+`webdriver-manager` descarga automáticamente el ChromeDriver compatible con tu versión de Chrome; no necesitas instalarlo manualmente.
 
 ## Configuración
 
-Edita la sección `CONFIG` al inicio de `descargar_comprobantes_sri.py`:
+El RUC y la clave se proporcionan mediante variables de entorno. Los demás valores se configuran actualmente en la sección `CONFIG` al inicio de `descargar_comprobantes_sri.py`.
 
-| Variable | Ejemplo                    | Descripción |
-|---|----------------------------|---|
-| `RUC` | `"0999999999001"`          | Tu RUC o cédula |
-| `CLAVE` | `"tu_clave"`               | Tu contraseña del portal SRI |
-| `MES_INICIO` / `AÑO_INICIO` | `1` / `2025`               | Primer mes del rango |
-| `MES_FIN` / `AÑO_FIN` | `12` / `2025`              | Último mes del rango |
-| `DIRECTORIO_DESCARGA` | `"~/sri_comprobantes"`     | Carpeta raíz de descargas |
-| `BROWSER_PATH` | `"/usr/bin/google-chrome"` | Ruta al ejecutable del navegador |
-| `TIMEOUT` | `20`                       | Segundos máximos de espera por elemento |
-| `PAUSA_ENTRE_DESCARGAS` | `1.5`                      | Pausa en segundos entre cada descarga |
+| Variable | Valor o ejemplo | Cómo se configura | Descripción |
+|---|---|---|---|
+| `RUC` | `"0999999999001"` | Variable de entorno `SRI_RUC` | RUC o cédula para iniciar sesión |
+| `CLAVE` | `"tu_clave"` | Variable de entorno `SRI_CLAVE` | Contraseña del portal SRI |
+| `MES_INICIO` / `AÑO_INICIO` | `1` / `2025` | Código, sección `CONFIG` | Primer mes del rango |
+| `MES_FIN` / `AÑO_FIN` | `12` / `2025` | Código, sección `CONFIG` | Último mes del rango |
+| `DIRECTORIO_DESCARGA` | `<proyecto>/sri_comprobantes` | Código, sección `CONFIG` | Carpeta raíz de descargas; por defecto se crea junto al script |
+| `BROWSER_PATH` | `"/usr/bin/google-chrome"` | Código, sección `CONFIG` | Ruta al ejecutable de Google Chrome |
+| `TIMEOUT` | `20` | Código, sección `CONFIG` | Segundos máximos de espera por elemento |
 
 ## Ejecución
 
