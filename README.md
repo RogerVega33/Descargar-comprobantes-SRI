@@ -1,6 +1,6 @@
 # SRI Ecuador — Descarga automática de comprobantes electrónicos
 
-Automatiza la descarga de documentos electrónicos recibidos desde el portal del SRI, organizándolos por mes en XML y PDF.
+Automatiza la descarga de documentos electrónicos (facturas) recibidos desde el portal del SRI, organizándolos por mes en XML y PDF.
 
 
 ## ¿Qué hace?
@@ -31,6 +31,12 @@ Resultado:
 │   └── ...
 ```
 
+## Demo
+
+![Ejecución del script](docs/assets/demo-descarga-comprobantes-sri.gif)
+
+Al ejecutar el script, se abrirá una ventana del navegador en la que podrás observar todo el proceso de descarga.
+
 ## Requisitos
 
 - Linux
@@ -49,20 +55,6 @@ python3 -m pip install -r requirements.txt
 ```
 
 `webdriver-manager` descarga automáticamente el ChromeDriver compatible con tu versión de Chrome; no necesitas instalarlo manualmente.
-
-## Configuración
-
-El RUC y la clave se proporcionan mediante variables de entorno. El rango de descarga se indica al ejecutar el script y los demás valores se configuran en la sección `CONFIG` al inicio de `descargar_comprobantes_sri.py`.
-
-| Variable u opción | Valor o ejemplo | Cómo se configura | Descripción |
-|---|---|---|---|
-| `RUC` | `"0999999999001"` | Variable de entorno `SRI_RUC` | RUC o cédula para iniciar sesión |
-| `CLAVE` | `"tu_clave"` | Variable de entorno `SRI_CLAVE` | Contraseña del portal SRI |
-| `--desde` | `2025-01` | Argumento obligatorio | Primer mes del rango, en formato `AAAA-MM` |
-| `--hasta` | `2025-12` | Argumento obligatorio | Último mes del rango, en formato `AAAA-MM` |
-| `DIRECTORIO_DESCARGA` | `<proyecto>/sri_comprobantes` | Código, sección `CONFIG` | Carpeta raíz de descargas; por defecto se crea junto al script |
-| `BROWSER_PATH` | `"/usr/bin/google-chrome"` | Código, sección `CONFIG` | Ruta al ejecutable de Google Chrome |
-| `TIMEOUT` | `20` | Código, sección `CONFIG` | Segundos máximos de espera por elemento |
 
 ## Ejecución
 
@@ -86,6 +78,20 @@ El mes debe estar entre `01` y `12`, y `--desde` no puede ser posterior a `--has
 ```python
 opciones.add_argument("--headless=new")
 ```
+
+## Configuración
+
+El RUC y la clave se proporcionan mediante variables de entorno. El rango de descarga se indica al ejecutar el script y los demás valores se configuran en la sección `CONFIG` al inicio de `descargar_comprobantes_sri.py`.
+
+| Variable u opción | Valor o ejemplo | Cómo se configura | Descripción |
+|---|---|---|---|
+| `RUC` | `"0999999999001"` | Variable de entorno `SRI_RUC` | RUC o cédula para iniciar sesión |
+| `CLAVE` | `"tu_clave"` | Variable de entorno `SRI_CLAVE` | Contraseña del portal SRI |
+| `--desde` | `2025-01` | Argumento obligatorio | Primer mes del rango, en formato `AAAA-MM` |
+| `--hasta` | `2025-12` | Argumento obligatorio | Último mes del rango, en formato `AAAA-MM` |
+| `DIRECTORIO_DESCARGA` | `<proyecto>/sri_comprobantes` | Código, sección `CONFIG` | Carpeta raíz de descargas; por defecto se crea junto al script |
+| `BROWSER_PATH` | `"/usr/bin/google-chrome"` | Código, sección `CONFIG` | Ruta al ejecutable de Google Chrome |
+| `TIMEOUT` | `20` | Código, sección `CONFIG` | Segundos máximos de espera por elemento |
 
 ## Control del teclado
 
