@@ -37,6 +37,8 @@ Resultado:
 
 Al ejecutar el script, se abrirá una ventana del navegador en la que podrás observar todo el proceso de descarga.
 
+![Ejecución del script](docs/assets/demo-descarga-comprobantes-sri2.gif)
+
 ## Requisitos
 
 - Linux
@@ -72,12 +74,6 @@ python3 descargar_comprobantes_sri.py --desde 2026-03 --hasta 2026-03
 ```
 
 El mes debe estar entre `01` y `12`, y `--desde` no puede ser posterior a `--hasta`.
-
-**Modo headless** (sin ventana de Chrome): descomenta esta línea en `configurar_driver()`:
-
-```python
-opciones.add_argument("--headless=new")
-```
 
 ## Configuración
 

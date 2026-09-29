@@ -168,9 +168,6 @@ def configurar_driver(dir_descarga):
     opciones.binary_location = BROWSER_PATH
     opciones.add_experimental_option("prefs", prefs)
 
-    # Descomenta la siguiente línea para correr en modo invisible (headless)
-    # opciones.add_argument("--headless=new")
-
     opciones.add_argument("--no-sandbox")
     opciones.add_argument("--disable-dev-shm-usage")
     opciones.add_argument("--disable-blink-features=AutomationControlled")
@@ -272,20 +269,31 @@ def navegar_comprobantes_recibidos(driver):
     enlace_recibidos = esperar_clickable(driver, By.CSS_SELECTOR,
         "a[href*='redireccion=57'][href*='idGrupo=55']"
     )
+    ventana_anterior = driver.current_window_handle
     enlace_recibidos.click()
 
-    # Paso 3: esperar que cargue el formulario en la nueva pestaña/página
-    # El portal puede abrir en nueva pestaña — cambiamos a ella si es necesario
-    try:
-        esperar(driver, By.ID, "frmPrincipal:ano", timeout=8)
-        log.info("Formulario de consulta listo.")
-    except TimeoutException:
-        # Intentar cambiar a la última pestaña abierta
-        if len(driver.window_handles) > 1:
-            driver.switch_to.window(driver.window_handles[-1])
-            log.info("Cambiado a nueva pestaña del portal.")
-        esperar(driver, By.ID, "frmPrincipal:ano")
-        log.info("Formulario de consulta listo.")
+    # Paso 3: el portal puede reutilizar la pestaña o abrir otra. Revisamos
+    # ambas posibilidades en cada sondeo para no esperar varios segundos en la
+    # pestaña anterior cuando la nueva ya terminó de cargar.
+    def formulario_disponible(driver):
+        handles = driver.window_handles
+        ventanas_nuevas = [h for h in handles if h != ventana_anterior]
+        handles_ordenados = ventanas_nuevas or [ventana_anterior]
+
+        for handle in handles_ordenados:
+            try:
+                driver.switch_to.window(handle)
+                campo_año = driver.find_element(By.ID, "frmPrincipal:ano")
+                if campo_año.is_displayed():
+                    return campo_año
+            except (NoSuchElementException, StaleElementReferenceException, WebDriverException):
+                continue
+        return False
+
+    WebDriverWait(driver, TIMEOUT, poll_frequency=0.2).until(formulario_disponible)
+    if driver.current_window_handle != ventana_anterior:
+        log.info("Cambiado a nueva pestaña del portal.")
+    log.info("Formulario de consulta listo.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -310,20 +318,24 @@ def consultar_periodo(driver, año, mes):
     Select(esperar(driver, By.ID, "frmPrincipal:cmbTipoComprobante")).select_by_value("1")
 
     def lanzar_consulta():
-        try:
-            WebDriverWait(driver, 5).until(
-                EC.presence_of_element_located((By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"))
-            )
-            btn = esperar_clickable_cualquiera(driver, By.ID, IDS_BOTON_BUSCAR)
-            driver.execute_script("arguments[0].click();", btn)
+        # Si ya había resultados, conservamos una referencia para detectar su
+        # reemplazo. En la primera consulta no esperamos una tabla inexistente:
+        # hacemos clic inmediatamente.
+        filas_anteriores = driver.find_elements(
+            By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"
+        )
+        elemento_tabla = filas_anteriores[0] if filas_anteriores else None
+
+        btn = esperar_clickable_cualquiera(driver, By.ID, IDS_BOTON_BUSCAR)
+        driver.execute_script("arguments[0].click();", btn)
+
+        if elemento_tabla is not None:
             try:
-                elemento_tabla = driver.find_element(By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}")
                 WebDriverWait(driver, TIMEOUT).until(EC.staleness_of(elemento_tabla))
-            except (NoSuchElementException, StaleElementReferenceException):
-                pass  # la tabla ya cambió de estado, podemos continuar
-        except TimeoutException:
-            btn = esperar_clickable_cualquiera(driver, By.ID, IDS_BOTON_BUSCAR)
-            driver.execute_script("arguments[0].click();", btn)
+            except TimeoutException:
+                # Algunos despliegues actualizan la tabla sin reemplazar el
+                # nodo. La espera de tabla/captcha de abajo confirma el estado.
+                pass
 
     for intento in range(3):
         lanzar_consulta()
@@ -532,9 +544,19 @@ def set_resultados_por_pagina(driver):
         opciones_valores = [o.get_attribute("value") for o in sel.options]
         maximo = max(opciones_valores, key=lambda v: int(v))
         if sel.first_selected_option.get_attribute("value") != maximo:
+            filas_anteriores = driver.find_elements(
+                By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}"
+            )
+            primera_fila = filas_anteriores[0] if filas_anteriores else None
             sel.select_by_value(maximo)
             log.info(f"  Resultados por pagina ajustados a {maximo}.")
-            time.sleep(2)
+            if primera_fila is not None:
+                WebDriverWait(driver, TIMEOUT).until(EC.staleness_of(primera_fila))
+                WebDriverWait(driver, TIMEOUT).until(
+                    EC.presence_of_element_located(
+                        (By.ID, f"{ID_PREFIX}:0:{ID_SUFIJO_XML}")
+                    )
+                )
     except Exception as e:
         log.warning(f"  No se pudo ajustar resultados por pagina: {e}")
 
